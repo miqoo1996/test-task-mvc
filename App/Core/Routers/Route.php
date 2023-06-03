@@ -86,7 +86,7 @@ class Route implements RouteInterface
                 Request::isRequestMethod('patch') ||
                 Request::isRequestMethod('delete')
             ) {
-                if (Request::post('csrf_token') !== Request::getCsrfToken()) {
+                if (empty(Request::getCsrfToken()) || Request::post('csrf_token') !== Request::getCsrfToken()) {
                     http_response_code(403);
 
                     die('CSRF token mismatch.');
