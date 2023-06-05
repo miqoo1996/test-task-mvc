@@ -1,10 +1,10 @@
-CREATE DATABASE test_task CHARACTER SET utf8 COLLATE utf8_general_ci;
+CREATE DATABASE test_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE test_task;
 
-create table texts(
-  id bigint auto_increment primary key,
-  unique_key varchar(100) not null,
-  value      longtext     not null,
-  constraint unique_key_idx  unique (unique_key)
-);
+CREATE TABLE texts (
+    id bigint auto_increment primary key,
+    unique_key varchar(100) not null,
+    value longtext not null,
+    CONSTRAINT unique_key_idx UNIQUE (unique_key)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
