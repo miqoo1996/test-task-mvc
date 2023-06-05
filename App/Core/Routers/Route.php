@@ -24,17 +24,23 @@ class Route implements RouteInterface
     /**
      * @var array
      */
-    protected static array $methods = ['get', 'post', 'put', 'patch', 'delete'];
+    protected static array $methods = [
+        'get',
+        'post',
+        'put',
+        'patch',
+        'delete'
+    ];
 
     /**
      * @var string
      */
-    public static string $controller;
+    protected static string $controller;
 
     /**
      * @var  string
      */
-    public static string $action;
+    protected static string $action;
 
     /**
      * @var bool
@@ -70,60 +76,30 @@ class Route implements RouteInterface
         return self::init($path, ...$arguments);
     }
 
-
     /**
      * @param string $path
      * @param array $arguments
      * @return bool
      * @throws \ReflectionException
+     * @throws \Exception
      */
     private static function init(string $path, array $arguments = []): bool
     {
-        if (self::$isApiMode === false) {
-            if (empty(Request::getCsrfToken())) {
-                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-            }
-
-            if (
-                Request::isRequestMethod('post') ||
-                Request::isRequestMethod('put') ||
-                Request::isRequestMethod('patch') ||
-                Request::isRequestMethod('delete')
-            ) {
-                if (empty(Request::getCsrfToken()) || Request::post('csrf_token') !== Request::getCsrfToken()) {
-                    http_response_code(403);
-
-                    die('CSRF token mismatch.');
-                } else {
-                    // update CSRF token for the next request
-                    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-                }
-            }
-        }
-
-        list($controller, $action) = $arguments;
-
-        self::$controller = $controller;
-        self::$action = $action;
-
         $uri = explode('?', $_SERVER['REQUEST_URI']);
-        $route = $uri[0];
 
-        if ($route == $path) {
-            $controller = self::$controller;
-            $action = self::$action;
+        $route = $uri[0] ?? null;
+
+        if ($route === $path) {
+            list($controller, $action) = $arguments;
+
+            self::$controller = $controller;
+            self::$action = $action;
+
+            if (self::$isApiMode === false) {
+                self::checkCsrfToken();
+            }
 
             /// Handle Constructor Arguments
-            $class = new ReflectionClass(self::$controller);
-
-            $constructorReflection = $class->getConstructor();
-
-            $constructPrams = [];
-            if ($constructorReflection) {
-                $constructPrams = $constructorReflection->getParameters();
-            }
-            ///---------------------
-
             $constructorNewParams = [];
             array_map(function (ReflectionParameter $param) use (&$constructorNewParams) {
                 $className = $param->getType()->getName();
@@ -131,30 +107,83 @@ class Route implements RouteInterface
                 if (class_exists($className)) {
                     $constructorNewParams[] = new $className;
                 }
-            }, $constructPrams);
+            }, self::getConstructorParams());
 
             $controller = empty($constructorNewParams) ? new $controller : new $controller(...$constructorNewParams);
 
-            $r = new ReflectionMethod($controller, $action);
-
-            $params = $r->getParameters();
-
-            $reflectionParams = [];
-            foreach ($params as $param) {
-                $className = $param->getType()->getName();
-
-                if (class_exists($className)) {
-                    DI::make($className);
-                    $reflectionParams[] = DI::get($className);
-                    continue;
-                }
-
-                $reflectionParams[] = $className;
-            }
-
-            $controller->$action(...$reflectionParams);
+            $controller->$action(...self::getActionParams());
         }
 
         return true;
+    }
+    /**
+     * @return void
+     * @throws \Exception
+     */
+    private static function checkCsrfToken() : void
+    {
+        if (empty(Request::getCsrfToken())) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+
+        if (
+            Request::isRequestMethod('post') ||
+            Request::isRequestMethod('put') ||
+            Request::isRequestMethod('patch') ||
+            Request::isRequestMethod('delete')
+        ) {
+            if (empty(Request::getCsrfToken()) || Request::post('csrf_token') !== Request::getCsrfToken()) {
+                http_response_code(403);
+
+                die('CSRF token mismatch.');
+            } else {
+                // update CSRF token for the next request
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            }
+        }
+    }
+
+    /**
+     * @return array
+     * @throws \ReflectionException
+     */
+    private static function getConstructorParams() : array
+    {
+        $class = new ReflectionClass(self::$controller);
+
+        $constructorReflection = $class->getConstructor();
+
+        $constructPrams = [];
+        if ($constructorReflection) {
+            $constructPrams = $constructorReflection->getParameters();
+        }
+
+        return $constructPrams;
+    }
+
+    /**
+     * @return array
+     * @throws \ReflectionException
+     */
+    private static function getActionParams(): array
+    {
+        $r = new ReflectionMethod(self::$controller, self::$action);
+
+        $reflectionParams = [];
+        foreach ($r->getParameters() as $param) {
+            $className = $param->getType()->getName();
+
+            if (class_exists($className)) {
+                DI::make($className);
+
+                $reflectionParams[] = DI::get($className);
+
+                continue;
+            }
+
+            $reflectionParams[] = $className;
+        }
+
+        return $reflectionParams;
     }
 }
