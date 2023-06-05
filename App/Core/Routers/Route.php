@@ -80,6 +80,10 @@ class Route implements RouteInterface
     private static function init(string $path, array $arguments = []): bool
     {
         if (self::$isApiMode === false) {
+            if (empty(Request::getCsrfToken())) {
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            }
+
             if (
                 Request::isRequestMethod('post') ||
                 Request::isRequestMethod('put') ||
@@ -90,10 +94,10 @@ class Route implements RouteInterface
                     http_response_code(403);
 
                     die('CSRF token mismatch.');
+                } else {
+                    // update CSRF token for the next request
+                    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
                 }
-            } else {
-                // update CSRF token for the next request
-                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
             }
         }
 
